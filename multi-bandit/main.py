@@ -1,9 +1,3 @@
-"""
-
-We have N bandits and each bandits return a number from a normal distribution (with different mean).
-
-"""
-
 import numpy as np
 
 MN_MEAN = 1
