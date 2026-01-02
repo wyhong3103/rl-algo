@@ -123,7 +123,8 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
     action_values = policy.model(batch_obs)
     action_values = torch.gather(action_values, dim=1, index=batch_action_idx.unsqueeze(1)).squeeze(1)
 
-    next_max_action = torch.max(target_model(batch_obs_p), dim=-1).values.detach()
+    next_online_action_values = policy.model(batch_obs_p).detach()
+    next_max_action = torch.gather(target_model(batch_obs_p), dim=1, index=torch.argmax(next_online_action_values, dim=1).unsqueeze(1)).squeeze(1).detach()
     targets = batch_reward + gamma * (1 - batch_terminated) * next_max_action
     
     loss = criterion(action_values, targets)

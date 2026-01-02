@@ -4,19 +4,24 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 import torch.optim as optim
+from sortedcontainers import SortedList
 
-class QNetwork(torch.nn.Module):
+class DuelingQNetwork(torch.nn.Module):
   def __init__(self, state_size, action_size):
-    super(QNetwork, self).__init__()
+    super(DuelingQNetwork, self).__init__()
     self.fc1 = torch.nn.Linear(state_size, 512)
     self.fc2 = torch.nn.Linear(512, 512)
-    self.fc3 = torch.nn.Linear(512, action_size)
+    self.fc_v = torch.nn.Linear(512, 1)
+    self.fc_a = torch.nn.Linear(512, action_size)
 
   def forward(self, x):
     x = torch.relu(self.fc1(x))
     x = torch.relu(self.fc2(x))
-    x = self.fc3(x)
-    return x
+    v = self.fc_v(x)
+    a = self.fc_a(x)
+    q = v + a - a.mean(dim=1, keepdim=True)
+
+    return q
 
 class Policy:
   def __init__(self, model, state_size, action_size):
@@ -41,23 +46,51 @@ class ReplayBuffer:
   def __init__(self, length, batch_size):
     self.length = length
     self.batch_size = batch_size
+    self.sl = SortedList()
     self.cnt = 0
-    self.rb = [tuple() for _ in range(length)]
-  
+    self.alpha = 0.6
+    self.experiences = [tuple() for _ in range(length)]
+
+    priority = 1 / (torch.arange(length) + 1)
+    self.scaled_priority = priority.pow(self.alpha)
+    self.prefix_sum_sp = torch.cumsum(self.scaled_priority, dim=0)
+ 
   def insert(self, experience):
-    self.rb[self.cnt % self.length] = experience
-    self.cnt += 1
+    max_priority = self.sl[-1][0] if self.cnt > 0 else 1.0
+    
+    idx = self.cnt if self.cnt < self.length else self.sl[0][1]
+    if self.cnt >= self.length:
+        self.sl.discard(self.sl[0])
+    else:
+        self.cnt += 1
+    
+    experience += (max_priority,)
+    self.experiences[idx] = experience
+    self.sl.add((experience[-1], idx))
+
+  def update(self, idx, err):
+    experience = self.experiences[idx]
+    self.sl.discard((experience[-1], idx))
+
+    experience = experience[:-1] + (err,)
+    self.sl.add((experience[-1], idx))
+    self.experiences[idx] = experience
   
-  def sample(self):
-    return [self.rb[i] for i in np.random.randint(0, min(self.cnt, self.length), self.batch_size)]
+  def sample(self, beta):
+    probs = self.scaled_priority[:self.cnt] / self.prefix_sum_sp[self.cnt-1]
+ 
+    ranks = torch.multinomial(probs, self.batch_size)
+    indices = [self.sl[-(i+1)][1] for i in ranks]
+    experiences = [self.experiences[i] for i in indices]
+    weights = (1 / (self.cnt * probs[ranks]))**beta 
+    weights = weights / torch.max(weights)
+    return experiences, indices, weights
 
-
-def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_len, target_update_freq, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
+def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_len, target_update_freq, eps_start=1.0, eps_end=0.01, eps_decay=0.995, tau=0.99, beta=0.4):
   env = gym.make("CartPole-v1", render_mode=None)
-  obs, _= env.reset()
+  obs, _ = env.reset()
 
   target_model = copy.deepcopy(policy.model)
-  criterion = torch.nn.MSELoss()
   optimizer = optim.RMSprop(model.parameters(),
                             lr=0.01,
                             alpha=0.99,     
@@ -68,6 +101,7 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
   rewards = []
   policy.EPS = eps_start
   warmup_steps = batch_size * 2
+  beta_increment = (1 - beta) / (total_episodes * 500)
 
   plt.ion()  
   _, ax = plt.subplots()
@@ -113,7 +147,7 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
     
     # Train every step after warmup
     optimizer.zero_grad()
-    batches = rb.sample()
+    batches, indices, weights = rb.sample(beta)
     batch_obs = torch.tensor([i[0] for i in batches])
     batch_action_idx = torch.tensor([i[1] for i in batches])
     batch_reward = torch.tensor([i[2] for i in batches], dtype=torch.float32)
@@ -123,17 +157,26 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
     action_values = policy.model(batch_obs)
     action_values = torch.gather(action_values, dim=1, index=batch_action_idx.unsqueeze(1)).squeeze(1)
 
-    next_max_action = torch.max(target_model(batch_obs_p), dim=-1).values.detach()
+    next_online_action_values = policy.model(batch_obs_p).detach()
+    next_max_action = torch.gather(target_model(batch_obs_p), dim=1, index=torch.argmax(next_online_action_values, dim=1).unsqueeze(1)).squeeze(1).detach()
     targets = batch_reward + gamma * (1 - batch_terminated) * next_max_action
-    
-    loss = criterion(action_values, targets)
+    td_err = action_values - targets 
+
+    loss = ((weights * td_err).pow(2)).mul(0.5).mean()
     loss.backward()
+    torch.nn.utils.clip_grad_norm_(policy.model.parameters(), max_norm=1.0)
     optimizer.step()
 
-    # Update target network every N steps
-    if step_count % (target_update_freq) == 0:
-      target_model = copy.deepcopy(policy.model)
-      print(f"Target network updated at step {step_count}")      
+    # exponential update
+    with torch.no_grad():
+      td_err_detached = td_err.detach()
+      for i in range(len(indices)):
+        rb.update(indices[i], td_err_detached[i].abs())
+
+      for target, online in zip(target_model.parameters(), policy.model.parameters()):
+        target.data.copy_(tau * target.data + (1 - tau) * online.data)
+      
+      beta = min(1, beta + beta_increment)
 
   print("Training finished!")
 
@@ -166,13 +209,14 @@ gamma = 0.99
 state_size = 4
 action_size = 2
 batch_size = 64
-model = QNetwork(state_size, action_size)
+model = DuelingQNetwork(state_size, action_size)
 policy = Policy(model, state_size, action_size)
 vis_window_len = 30
 replay_buffer_len = 50000
 target_update_freq = 500
 total_episodes=600
+beta = 0.4
 
-train(policy, batch_size, gamma, total_episodes, replay_buffer_len, vis_window_len, target_update_freq)
+train(policy, batch_size, gamma, total_episodes, replay_buffer_len, vis_window_len, target_update_freq, beta=beta)
 
 simulate(policy)
