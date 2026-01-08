@@ -66,6 +66,7 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
   rb = ReplayBuffer(replay_buffer_len, batch_size)
   rewards_sum = 0
   rewards = []
+  moving_avg = []
   policy.EPS = eps_start
   warmup_steps = batch_size * 2
 
@@ -92,15 +93,16 @@ def train(policy, batch_size, gamma, total_episodes, replay_buffer_len, window_l
       else:
         print(f"Truncated! Rewards: {rewards_sum}, Epsilon: {policy.EPS:.3f}")
 
-      rewards.append((rewards_sum + sum(rewards[-min(window_len-1, len(rewards)):])) / min(window_len, len(rewards)+1))
+      moving_avg.append((rewards_sum + sum(rewards[-min(window_len-1, len(rewards)):])) / min(window_len, len(rewards)+1))
+      rewards.append(rewards_sum)
       rewards_sum = 0
       
       # Decay epsilon after each episode
       policy.EPS = max(eps_end, policy.EPS * eps_decay)
       
       # Update plot
-      line.set_xdata(range(len(rewards)))
-      line.set_ydata(rewards)
+      line.set_xdata(range(len(moving_avg)))
+      line.set_ydata(moving_avg)
       ax.relim()           
       ax.autoscale_view()  
       plt.pause(0.01)

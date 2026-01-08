@@ -46,6 +46,7 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
   line, = ax.plot([], []) 
 
   rewards_sum = 0
+  moving_avg = []
   rewards = []
 
   while len(rewards) <= total_episodes:
@@ -74,7 +75,8 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
         else:
           print(f"Truncated! Rewards", rewards_sum)
 
-        rewards.append((rewards_sum + sum(rewards[-min(window_len-1, len(rewards)):])) / min(window_len, len(rewards)+1))
+        moving_avg.append((rewards_sum + sum(rewards[-min(window_len-1, len(rewards)):])) / min(window_len, len(rewards)+1))
+        rewards.append(rewards_sum)
         rewards_sum = 0
       else:
         obs = obs_p
@@ -83,8 +85,8 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
     loss.backward()
     optimizer.step()
 
-    line.set_xdata(range(len(rewards)))
-    line.set_ydata(rewards)
+    line.set_xdata(range(len(moving_avg)))
+    line.set_ydata(moving_avg)
     ax.relim()           
     ax.autoscale_view()  
     plt.pause(0.01)      

@@ -102,6 +102,7 @@ class REINFORCE:
     _, ax = plt.subplots()
     line, = ax.plot([], []) 
     window_len = 30
+    moving_avg = []
     returns = []
 
     for episode in range(self.total_episodes):
@@ -132,9 +133,10 @@ class REINFORCE:
       self.optimize(rewards, logpas, entropys)
       print(f"Episode {episode}: {sum(rewards)} rewards")
 
-      returns.append((sum(rewards) + sum(returns[-min(window_len-1, len(returns)):])) / min(window_len, len(returns)+1))
-      line.set_xdata(range(len(returns)))
-      line.set_ydata(returns)
+      moving_avg.append((sum(rewards) + sum(returns[-min(window_len-1, len(returns)):])) / min(window_len, len(returns)+1))
+      returns.append(sum(rewards))
+      line.set_xdata(range(len(moving_avg)))
+      line.set_ydata(moving_avg)
       ax.relim()           
       ax.autoscale_view()  
       plt.pause(0.01)
