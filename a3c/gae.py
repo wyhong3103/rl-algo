@@ -106,7 +106,8 @@ class A3C:
     self.global_policy_optimizer = SharedAdam(self.global_policy_model.parameters(), lr=1e-3)
     self.global_value_optimizer = SharedAdam(self.global_value_model.parameters(), lr=1e-3)
     self.gamma = 0.99
-    self.total_episodes = 100
+    self.tau = 0.6
+    self.total_episodes = 500
     self.n = 100
     self.n_workers = 3
   
@@ -114,6 +115,7 @@ class A3C:
     logpas = torch.stack(logpas).view(-1)
     values = torch.stack(values).view(-1)
     entropys = torch.stack(entropys).view(-1)
+    rewards = torch.tensor(rewards)
 
     returns = []
     g_sum = rewards[-1]
@@ -121,10 +123,15 @@ class A3C:
         g_sum = r + self.gamma * g_sum
         returns.insert(0, g_sum)
 
-    returns = torch.tensor(returns, dtype=torch.float32)
-    value_errors = returns - values
+    td_errors = rewards[:-1] + self.gamma * values[1:] - values[:-1]
+    td_l_g_sum = 0
+    td_l_returns = []
+    for td_err in reversed(td_errors):
+        td_l_g_sum = td_err + self.tau * self.gamma * td_l_g_sum
+        td_l_returns.insert(0, td_l_g_sum)
 
-    policy_loss = -(value_errors.detach() * logpas).mean() - 0.01 * entropys.mean()
+    td_l_returns = torch.tensor(td_l_returns, dtype=torch.float32)
+    policy_loss = -(td_l_returns.detach() * logpas).mean() - 0.01 * entropys.mean()
 
     self.global_policy_optimizer.zero_grad()
     policy_loss.backward()
@@ -138,6 +145,9 @@ class A3C:
     local_policy_model.load_state_dict(
       self.global_policy_model.state_dict()
     )
+
+    returns = torch.tensor(returns, dtype=torch.float32)
+    value_errors = returns - values[:-1]
 
     value_loss = value_errors.pow(2).mean()
     self.global_value_optimizer.zero_grad()
@@ -204,8 +214,10 @@ class A3C:
         if current_step == self.n or truncated:
           value = local_value_model(torch.tensor(obs))
           rewards.append(value.item())
+          values.append(value)
         elif terminated:
           rewards.append(0)
+          values.append(torch.zeros_like(value))
         
         if truncated:
           terminated = True
