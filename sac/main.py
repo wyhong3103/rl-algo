@@ -139,17 +139,23 @@ class SAC:
             + (1.0 - self.config.tau) * target_p.data
           )
   
-  def sample_action(self, s):
+  def sample_action(self, s, explore=True):
       mu, std = self.online_policy_network(s)
-      normal = Normal(mu, std)
+      if explore:
+        normal = Normal(mu, std)
+        a_normal = normal.rsample()
+        a_squashed = F.tanh(a_normal)
 
-      a_normal = normal.rsample()
-      a_squashed = F.tanh(a_normal)
+        entropy = normal.log_prob(a_normal) - torch.log(1 - a_squashed.pow(2) + 1e-6)
+        entropy = -entropy.sum(dim=1, keepdim=True)
 
-      entropy = normal.log_prob(a_normal) - torch.log(1 - a_squashed.pow(2) + 1e-6)
-      entropy = -entropy.sum(dim=1, keepdim=True)
+        return a_squashed, entropy
+      else:
+        a_normal = mu
+        a_squashed = F.tanh(a_normal)
 
-      return a_squashed, entropy
+        return a_squashed, None
+
 
   def optimize(self, batch):
     s = batch.states
@@ -195,10 +201,10 @@ class SAC:
     self.soft_update(self.online_value_network_2, self.target_value_network_2)
 
   @torch.no_grad
-  def select_action(self, s):
+  def select_action(self, s, explore=True):
     s_tensor = torch.tensor(s, dtype=torch.float32).unsqueeze(0) 
         
-    a_squashed, _ = self.sample_action(s_tensor)
+    a_squashed, _ = self.sample_action(s_tensor, explore)
 
     a_squashed = a_squashed.cpu().numpy()[0]
 
@@ -259,7 +265,7 @@ def simulate(config, sac):
   truncated = False
   
   while not (terminated or truncated):
-    a_squashed = sac.select_action(s)
+    a_squashed = sac.select_action(s, False)
     a_scaled = config.a_lb + (a_squashed + 1) / 2 * (config.a_ub - config.a_lb)
 
     s_p, r, terminated, truncated, _ = env.step(a_scaled)
