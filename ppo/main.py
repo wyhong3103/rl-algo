@@ -14,10 +14,10 @@ class Config:
   n_workers: int = 16
   state_dim: int = 3
   action_dims: np.array = np.array([1])
-  a_lb: np.array =np.array([-2.0]),
+  a_lb: np.array =np.array([-2.0])
   a_ub: np.array =np.array([2.0])
 
-  total_episodes: int = 50
+  total_episodes: int = 20
   rollout_steps: int = 512
   epochs_per_it: int = 10
   gamma: float = 0.99
@@ -340,11 +340,11 @@ def train(config, ppo):
         a, lp = ppo.get_action(s)
         a_take = a
 
-      if not config.is_continuous and a.shape[-1] == 1:
-        a_take = a.squeeze(-1)
+      if not config.is_continuous and a_take.shape[-1] == 1:
+        a_take = a_take.squeeze(-1)
       
       if config.is_continuous:
-        a_take = config.a_lb + (a + 1) / 2 * (config.a_ub - config.a_lb)
+        a_take = config.a_lb + (a_take + 1) / 2 * (config.a_ub - config.a_lb)
 
       s_p, r, terminated, _, _ = envs.step(a_take)
 
@@ -395,14 +395,14 @@ def simulate(config, ppo, render=False):
   
   while not (terminated or truncated):
     if config.is_continuous:
-      a, _, _ = ppo.get_action(s)
+      _, a, _ = ppo.get_action(s)
     else:
       a, _ = ppo.get_action(s)
     
     if config.is_continuous:
       a = config.a_lb + (a + 1) / 2 * (config.a_ub - config.a_lb)
 
-    if a.shape[-1] == 1:
+    if not config.is_continuous and a.shape[-1] == 1:
       a = a.squeeze(-1)
 
     s_p, r, terminated, truncated, _ = env.step(a)
