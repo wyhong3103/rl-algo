@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import torch.optim as optim
 
+
 class QNetwork(torch.nn.Module):
   def __init__(self, state_size, action_size):
     super(QNetwork, self).__init__()
@@ -17,6 +18,7 @@ class QNetwork(torch.nn.Module):
     x = torch.relu(self.fc2(x))
     x = self.fc3(x)
     return x
+
 
 class Policy:
   def __init__(self, model, state_size, action_size):
@@ -33,17 +35,18 @@ class Policy:
     action_idx = torch.argmax(a_p).item()
 
     if not get_max and p <= self.EPS:
-      action_idx = np.random.randint(0, self.action_size)  
+      action_idx = np.random.randint(0, self.action_size)
 
     return action_idx, a_p[action_idx]
+
 
 def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, window_len):
   env = gym.make("CartPole-v1", render_mode=None)
   obs, info = env.reset()
 
-  plt.ion()  
+  plt.ion()
   _, ax = plt.subplots()
-  line, = ax.plot([], []) 
+  (line,) = ax.plot([], [])
 
   rewards_sum = 0
   moving_avg = []
@@ -61,7 +64,11 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
 
       rewards_sum += reward
 
-      next_max_action = 0 if terminated and not truncated else policy.get_action(torch.tensor(obs_p), True)[1].detach()
+      next_max_action = (
+        0
+        if terminated and not truncated
+        else policy.get_action(torch.tensor(obs_p), True)[1].detach()
+      )
 
       target = reward + gamma * next_max_action
 
@@ -71,33 +78,37 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
       if terminated or truncated:
         obs, info = env.reset()
         if terminated:
-          print(f"Teminated! Rewards", rewards_sum)
+          print("Teminated! Rewards", rewards_sum)
         else:
-          print(f"Truncated! Rewards", rewards_sum)
+          print("Truncated! Rewards", rewards_sum)
 
-        moving_avg.append((rewards_sum + sum(rewards[-min(window_len-1, len(rewards)):])) / min(window_len, len(rewards)+1))
+        moving_avg.append(
+          (rewards_sum + sum(rewards[-min(window_len - 1, len(rewards)) :]))
+          / min(window_len, len(rewards) + 1)
+        )
         rewards.append(rewards_sum)
         rewards_sum = 0
       else:
         obs = obs_p
-    
+
     loss = criterion(action_values, targets)
     loss.backward()
     optimizer.step()
 
     line.set_xdata(range(len(moving_avg)))
     line.set_ydata(moving_avg)
-    ax.relim()           
-    ax.autoscale_view()  
-    plt.pause(0.01)      
+    ax.relim()
+    ax.autoscale_view()
+    plt.pause(0.01)
 
   print("Training finished!")
 
   plt.ioff()
   plt.show()
 
+
 def simulate(policy):
-  env = gym.make("CartPole-v1", render_mode='human')
+  env = gym.make("CartPole-v1", render_mode="human")
   obs, info = env.reset()
   rewards = 0
 
@@ -113,8 +124,9 @@ def simulate(policy):
       break
     else:
       obs = obs_p
-    
+
   print("Total rewards: ", rewards)
+
 
 gamma = 0.99
 state_size = 4
@@ -123,13 +135,11 @@ batch_size = 1024
 criterion = torch.nn.MSELoss()
 model = QNetwork(state_size, action_size)
 policy = Policy(model, state_size, action_size)
-optimizer = optim.RMSprop(model.parameters(),
-                          lr=0.01,
-                          alpha=0.99,     
-                          eps=1e-8,
-                          weight_decay=0)
+optimizer = optim.RMSprop(
+  model.parameters(), lr=0.01, alpha=0.99, eps=1e-8, weight_decay=0
+)
 window_len = 30
-total_episodes=5000
+total_episodes = 5000
 
 train(policy, optimizer, batch_size, criterion, gamma, total_episodes, window_len)
 

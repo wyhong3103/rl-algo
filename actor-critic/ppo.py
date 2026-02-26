@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 @dataclass
 class Config:
   env: str = "Pendulum-v1"
@@ -14,8 +15,8 @@ class Config:
   n_workers: int = 16
   state_dim: int = 3
   action_dims: np.array = np.array([1])
-  a_lb: np.array =np.array([-2.0])
-  a_ub: np.array =np.array([2.0])
+  a_lb: np.array = np.array([-2.0])
+  a_ub: np.array = np.array([2.0])
 
   total_episodes: int = 20
   rollout_steps: int = 512
@@ -47,13 +48,11 @@ class ValueNetwork(nn.Module):
     super(ValueNetwork, self).__init__()
     self.input_layer = nn.Linear(state_dim, hidden_dims[0])
     self.hidden_layers = nn.ModuleList()
-    for i in range(len(hidden_dims)-1):
-      self.hidden_layers.append(
-        nn.Linear(hidden_dims[i], hidden_dims[i+1])
-      )
+    for i in range(len(hidden_dims) - 1):
+      self.hidden_layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
     self.head = nn.Linear(hidden_dims[-1], 1)
     self.relu = nn.ReLU()
-  
+
   def forward(self, x):
     x = self.relu(self.input_layer(x))
     for i in self.hidden_layers:
@@ -69,34 +68,31 @@ class PolicyNetwork(nn.Module):
     self.is_continuous = is_continuous
     self.input_layer = nn.Linear(state_dim, hidden_dims[0])
     self.hidden_layers = nn.ModuleList()
-    for i in range(len(hidden_dims)-1):
-      self.hidden_layers.append(
-        nn.Linear(hidden_dims[i], hidden_dims[i+1])
-      )
+    for i in range(len(hidden_dims) - 1):
+      self.hidden_layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
 
     if self.is_continuous:
       self.mu_head = nn.Linear(hidden_dims[-1], sum(action_dims))
       self.std_head = nn.Linear(hidden_dims[-1], sum(action_dims))
     else:
-      self.heads = nn.ModuleList([
-          nn.Linear(hidden_dims[-1], dim) for dim in action_dims
-      ])
+      self.heads = nn.ModuleList(
+        [nn.Linear(hidden_dims[-1], dim) for dim in action_dims]
+      )
 
     self.relu = nn.ReLU()
     self.softplus = nn.Softplus()
-  
+
   def forward(self, x):
     x = self.relu(self.input_layer(x))
     for i in self.hidden_layers:
       x = self.relu(i(x))
-    
+
     if self.is_continuous:
       mu = self.mu_head(x)
       std = self.softplus(self.std_head(x))
 
       return mu, std
     else:
-
       return [head(x) for head in self.heads]
 
 
@@ -104,7 +100,7 @@ class EpisodeBuffer:
   def __init__(self, batch_size):
     self.batch_size = batch_size
     self.reset()
-  
+
   def reset(self):
     self.cnt = 0
     self.states = None
@@ -124,7 +120,7 @@ class EpisodeBuffer:
       current = new
     else:
       current = np.concatenate([current, new], axis=1)
-    
+
     return current
 
   def insert(self, s, a, r, s_p, v, v_p, log_prob, terminated):
@@ -132,15 +128,15 @@ class EpisodeBuffer:
     self.states = self.concat_by_worker(self.states, s)
     self.actions = self.concat_by_worker(self.actions, a)
     self.rewards = self.concat_by_worker(self.rewards, r)
-    self.next_states= self.concat_by_worker(self.next_states, s_p)
+    self.next_states = self.concat_by_worker(self.next_states, s_p)
     self.values = self.concat_by_worker(self.values, v)
     self.next_values = self.concat_by_worker(self.next_values, v_p)
     self.log_probs = self.concat_by_worker(self.log_probs, log_prob)
     self.terminated = self.concat_by_worker(self.terminated, terminated)
-  
+
   def set_advantages(self, advantages):
     self.advantages = advantages
-  
+
   def prepare_train(self):
     self.states = self.states.reshape(-1, self.states.shape[-1])
     self.next_states = self.next_states.reshape(-1, self.next_states.shape[-1])
@@ -152,14 +148,14 @@ class EpisodeBuffer:
 
     self.rewards = self.rewards.reshape(-1)
     self.terminated = self.terminated.reshape(-1)
-  
+
   def iter_batches(self):
     indices = np.arange(self.cnt)
     np.random.shuffle(indices)
 
     for start in range(0, self.cnt, self.batch_size):
       end = min(self.cnt, start + self.batch_size)
-      batch_idx = indices[start: end]
+      batch_idx = indices[start:end]
 
       yield Batch(
         states=torch.tensor(self.states[batch_idx], dtype=torch.float32),
@@ -170,7 +166,7 @@ class EpisodeBuffer:
         next_values=torch.tensor(self.next_values[batch_idx], dtype=torch.float32),
         log_probs=torch.tensor(self.log_probs[batch_idx], dtype=torch.float32),
         terminated=torch.tensor(self.terminated[batch_idx], dtype=torch.bool),
-        advantages=torch.tensor(self.advantages[batch_idx], dtype=torch.float32)
+        advantages=torch.tensor(self.advantages[batch_idx], dtype=torch.float32),
       )
 
 
@@ -178,55 +174,61 @@ class PPO:
   def __init__(self, config):
     self.config = config
     self.value_network = ValueNetwork(config.state_dim, [64, 64])
-    self.policy_network = PolicyNetwork(config.state_dim, config.action_dims, [64, 64], config.is_continuous)
-    
-    self.value_optimizer = optim.Adam(self.value_network.parameters(), lr=self.config.lr)
-    self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=self.config.lr)
+    self.policy_network = PolicyNetwork(
+      config.state_dim, config.action_dims, [64, 64], config.is_continuous
+    )
+
+    self.value_optimizer = optim.Adam(
+      self.value_network.parameters(), lr=self.config.lr
+    )
+    self.policy_optimizer = optim.Adam(
+      self.policy_network.parameters(), lr=self.config.lr
+    )
 
   def sample_action(self, s, explore=True):
-      if self.config.is_continuous:
-        mu, std = self.policy_network(s)
-        if explore:
-          dist = Normal(mu, std)
-          a = dist.rsample()
-          a_squashed = torch.tanh(a)
-    
-          log_prob = dist.log_prob(a).sum(axis=-1)
-          correction = torch.log(1 - a_squashed.pow(2) + 1e-6).sum(axis=-1)
-          log_prob -= correction
+    if self.config.is_continuous:
+      mu, std = self.policy_network(s)
+      if explore:
+        dist = Normal(mu, std)
+        a = dist.rsample()
+        a_squashed = torch.tanh(a)
 
-          entropy = dist.entropy()
+        log_prob = dist.log_prob(a).sum(axis=-1)
+        correction = torch.log(1 - a_squashed.pow(2) + 1e-6).sum(axis=-1)
+        log_prob -= correction
 
-          return a, a_squashed, log_prob, entropy
-        else:
-          a = mu
-          a_squashed = torch.tanh(a)
+        entropy = dist.entropy()
 
-          return a, a_squashed, None, None
+        return a, a_squashed, log_prob, entropy
       else:
-        multi_logits = self.policy_network(s)
-        actions = []
-        log_probs = []
-        entropies = []
+        a = mu
+        a_squashed = torch.tanh(a)
 
-        for logits in multi_logits:
-            dist = Categorical(logits=logits)
-            if explore:
-                a = dist.sample()
-                actions.append(a)
-                log_probs.append(dist.log_prob(a))
-                entropies.append(dist.entropy())
-            else:
-                actions.append(torch.argmax(logits, dim=-1))
+        return a, a_squashed, None, None
+    else:
+      multi_logits = self.policy_network(s)
+      actions = []
+      log_probs = []
+      entropies = []
 
-        if not explore:
-            return torch.stack(actions, dim=-1), None, None
+      for logits in multi_logits:
+        dist = Categorical(logits=logits)
+        if explore:
+          a = dist.sample()
+          actions.append(a)
+          log_probs.append(dist.log_prob(a))
+          entropies.append(dist.entropy())
+        else:
+          actions.append(torch.argmax(logits, dim=-1))
 
-        combined_a = torch.stack(actions, dim=-1)
-        combined_lp = torch.stack(log_probs, dim=-1).sum(dim=-1)
-        combined_ent = torch.stack(entropies, dim=-1).mean(dim=-1)
+      if not explore:
+        return torch.stack(actions, dim=-1), None, None
 
-        return combined_a, combined_lp, combined_ent
+      combined_a = torch.stack(actions, dim=-1)
+      combined_lp = torch.stack(log_probs, dim=-1).sum(dim=-1)
+      combined_ent = torch.stack(entropies, dim=-1).mean(dim=-1)
+
+      return combined_a, combined_lp, combined_ent
 
   @torch.no_grad
   def get_action(self, s, explore=True):
@@ -235,21 +237,21 @@ class PPO:
       a, a_squashed, log_prob, _ = self.sample_action(s_tensor, explore)
       a = a.cpu().numpy()
       a_squashed = a_squashed.cpu().numpy()
-      
+
       if explore:
         log_prob = log_prob.cpu().numpy()
 
       return a, a_squashed, log_prob
-      
+
     else:
       a, log_prob, _ = self.sample_action(s_tensor, explore)
       a = a.cpu().numpy()
-      
+
       if explore:
         log_prob = log_prob.cpu().numpy()
 
       return a, log_prob
-  
+
   @torch.no_grad
   def get_value(self, s):
     s_tensor = torch.tensor(s, dtype=torch.float32)
@@ -266,9 +268,11 @@ class PPO:
 
     for t in reversed(range(total_steps)):
       mask = 1 - terminated[t]
-      td_delta = rewards[t] + (self.config.gamma * next_values[t] * mask)  - values[t]
+      td_delta = rewards[t] + (self.config.gamma * next_values[t] * mask) - values[t]
 
-      advantages[t] = last_gae = td_delta + (self.config.gamma * self.config.lambd * mask * last_gae)
+      advantages[t] = last_gae = td_delta + (
+        self.config.gamma * self.config.lambd * mask * last_gae
+      )
 
     return advantages
 
@@ -279,7 +283,9 @@ class PPO:
 
       actions_squashed = torch.tanh(batch.actions)
       new_log_probs = dist.log_prob(batch.actions).sum(axis=-1, keepdim=True)
-      correction = torch.log(1 - actions_squashed.pow(2) + 1e-6).sum(axis=-1, keepdim=True)
+      correction = torch.log(1 - actions_squashed.pow(2) + 1e-6).sum(
+        axis=-1, keepdim=True
+      )
       new_log_probs -= correction
 
       entropy = dist.entropy().mean()
@@ -289,9 +295,9 @@ class PPO:
       entropies = []
 
       for i, logits in enumerate(multi_logits):
-          dist = Categorical(logits=logits)
-          new_log_probs.append(dist.log_prob(batch.actions[:, i]))
-          entropies.append(dist.entropy())
+        dist = Categorical(logits=logits)
+        new_log_probs.append(dist.log_prob(batch.actions[:, i]))
+        entropies.append(dist.entropy())
 
       new_log_probs = torch.stack(new_log_probs, dim=-1).sum(dim=-1, keepdim=True)
       entropy = torch.stack(entropies, dim=-1).mean()
@@ -299,9 +305,12 @@ class PPO:
     current_values = self.value_network(batch.states)
 
     ratio = torch.exp(new_log_probs - batch.log_probs)
-    
+
     surr1 = ratio * batch.advantages
-    surr2 = torch.clamp(ratio, 1.0 - self.config.eps, 1.0 + self.config.eps) * batch.advantages
+    surr2 = (
+      torch.clamp(ratio, 1.0 - self.config.eps, 1.0 + self.config.eps)
+      * batch.advantages
+    )
     policy_loss = -torch.min(surr1, surr2).mean() - self.config.ent_coef * entropy
     self.policy_optimizer.zero_grad()
     policy_loss.backward()
@@ -316,16 +325,18 @@ class PPO:
     torch.nn.utils.clip_grad_norm_(self.value_network.parameters(), 0.5)
     self.value_optimizer.step()
 
+
 def make_env():
-    return gym.make(config.env)
+  return gym.make(config.env)
+
 
 def train(config, ppo):
-  envs = gym.vector.AsyncVectorEnv([make_env for _ in range(config.n_workers)]) 
-  eb= EpisodeBuffer(config.batch_size)
+  envs = gym.vector.AsyncVectorEnv([make_env for _ in range(config.n_workers)])
+  eb = EpisodeBuffer(config.batch_size)
 
-  plt.ion()  
+  plt.ion()
   _, ax = plt.subplots()
-  line, = ax.plot([], []) 
+  (line,) = ax.plot([], [])
   window_len = 30
   returns = []
 
@@ -342,7 +353,7 @@ def train(config, ppo):
 
       if not config.is_continuous and a_take.shape[-1] == 1:
         a_take = a_take.squeeze(-1)
-      
+
       if config.is_continuous:
         a_take = config.a_lb + (a_take + 1) / 2 * (config.a_ub - config.a_lb)
 
@@ -353,11 +364,11 @@ def train(config, ppo):
 
       eb.insert(s, a, r, s_p, v, v_p, lp, terminated)
       s = s_p
-    
+
     advantages = []
     for w in range(config.n_workers):
       adv = ppo.compute_advantages(
-          eb.values[w], eb.next_values[w], eb.rewards[w], eb.terminated[w]
+        eb.values[w], eb.next_values[w], eb.rewards[w], eb.terminated[w]
       )
       advantages.append(adv)
 
@@ -368,18 +379,21 @@ def train(config, ppo):
     for _ in range(config.epochs_per_it):
       for batch in eb.iter_batches():
         ppo.optimize(batch)
-    
+
     eb.reset()
 
     print(f"Episode: {episode}")
 
     ret = simulate(config, ppo, False)
 
-    returns.append((ret + sum(returns[-min(window_len-1, len(returns)):])) / min(window_len, len(returns)+1))
+    returns.append(
+      (ret + sum(returns[-min(window_len - 1, len(returns)) :]))
+      / min(window_len, len(returns) + 1)
+    )
     line.set_xdata(range(len(returns)))
     line.set_ydata(returns)
-    ax.relim()           
-    ax.autoscale_view()  
+    ax.relim()
+    ax.autoscale_view()
     plt.pause(0.01)
 
 
@@ -392,13 +406,13 @@ def simulate(config, ppo, render=False):
   terminated = False
   rewards = 0
   truncated = False
-  
+
   while not (terminated or truncated):
     if config.is_continuous:
       _, a, _ = ppo.get_action(s)
     else:
       a, _ = ppo.get_action(s)
-    
+
     if config.is_continuous:
       a = config.a_lb + (a + 1) / 2 * (config.a_ub - config.a_lb)
 
@@ -418,7 +432,7 @@ def simulate(config, ppo, render=False):
   print(f"Simulation: {rewards} rewards")
 
   return rewards
-  
+
 
 if __name__ == "__main__":
   config = Config()
