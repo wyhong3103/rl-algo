@@ -148,6 +148,10 @@ class SarsaWithET:
     self.q += self.alpha * delta * self.e
     self.e = self.gamma * self.lmbda * self.e
 
+  def reset(self):
+    self.e.fill(0)
+
+
 
 class WatkinQET:
   def __init__(self, r, c):
@@ -179,11 +183,18 @@ class WatkinQET:
     else:
       self.e *= 0
 
+  def reset(self):
+    self.e.fill(0)
+
+
 
 def run_episode(env, policy, train=True):
-  obs, _ = env.reset()
-  is_wall = obs["image"][1][1][0] == 2
-  r, c, d = 0, 0, 0
+  if hasattr(policy, 'reset'):
+    policy.reset()
+
+  env.reset()
+  c, r = env.agent_pos
+  d = env.agent_dir
   a = policy.get_action(r, c, d)
   algo = policy.get_algo_type()
   cnt = 0
@@ -201,21 +212,8 @@ def run_episode(env, policy, train=True):
         print("Truncated")
         return -1
 
-    n_r, n_c, n_d = r, c, d
-    if a == 0:
-      n_d = (n_d - 1) % 4
-    elif a == 1:
-      n_d = (n_d + 1) % 4
-    else:
-      if not is_wall:
-        if n_d == 0:
-          n_c += 1
-        elif n_d == 1:
-          n_r += 1
-        elif n_d == 2:
-          n_c -= 1
-        else:
-          n_r -= 1
+    n_c, n_r = env.agent_pos
+    n_d = env.agent_dir
 
     if train:
       n_a = policy.get_action(n_r, n_c, n_d)
@@ -233,7 +231,6 @@ def run_episode(env, policy, train=True):
         policy.update(reward, r, c, d, a, n_r, n_c, n_d)
 
     r, c, d, a = n_r, n_c, n_d, n_a
-    is_wall = obs["image"][1][1][0] == 2
 
 
 def main():

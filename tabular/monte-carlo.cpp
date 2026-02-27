@@ -278,7 +278,7 @@ struct Episode {
 
 struct Policy{
     vector<vector<vector<vector<vector<vector<double>>>>>> qsa;
-    vector<vector<vector<vector<vector<vector<vi>>>>>> returns;
+    vector<vector<vector<vector<vector<vector<int>>>>>> return_cnt;
     const double epsilon = 0.1;
 
     Policy(int r, int c) {
@@ -303,12 +303,12 @@ struct Policy{
                             for (int n = 0; n < 3; ++n)
                                 qsa[i][j][k][l][m][n] = getRandomReward();
 
-        returns = vector<vector<vector<vector<vector<vector<vi>>>>>>(
-            r, vector<vector<vector<vector<vector<vi>>>>>(
-                c, vector<vector<vector<vector<vi>>>>(
-                    6, vector<vector<vector<vi>>>(
-                        6, vector<vector<vi>>(
-                            3, vector<vi>(3)
+        return_cnt = vector<vector<vector<vector<vector<vector<int>>>>>>(
+            r, vector<vector<vector<vector<vector<int>>>>>(
+                c, vector<vector<vector<vector<int>>>>(
+                    6, vector<vector<vector<int>>>(
+                        6, vector<vector<int>>(
+                            3, vector<int>(3, 0)
                         )
                     )
                 )
@@ -371,25 +371,24 @@ struct Policy{
             first_occur[sa] = i;
         }
 
-        for(auto& i : first_occur){
-            int at = i.sec;
+        for(auto& iter : first_occur){
+            int at = iter.sec;
             int sm = 0;
-            for(int i{at}; i < l; i++){
-                sm += rewards[i];
+            for(int j{at}; j < l; j++){
+                sm += rewards[j];
             }
 
-            pair<vi, pi> sa = i.fir;
+            pair<vi, pi> sa = iter.fir;
+            int rc = sa.fir[0];
+            int cc = sa.fir[1];
+            int vr = sa.fir[2];
+            int vc = sa.fir[3];
+            int ar = sa.sec.fir;
+            int ac = sa.sec.sec;
 
-            returns[sa.fir[0]][sa.fir[1]][sa.fir[2]][sa.fir[3]][sa.sec.fir][sa.sec.sec].pb(sm);
-
-            int sm_returns = 0;
-            int length_returns = 0;
-            for(auto& j : returns[sa.fir[0]][sa.fir[1]][sa.fir[2]][sa.fir[3]][sa.sec.fir][sa.sec.sec]){
-                sm_returns += j;
-                length_returns++;
-            }
-
-            qsa[sa.fir[0]][sa.fir[1]][sa.fir[2]][sa.fir[3]][sa.sec.fir][sa.sec.sec] = ((double)sm_returns) / length_returns;
+            return_cnt[rc][cc][vr][vc][ar][ac]++;
+            double avg = qsa[rc][cc][vr][vc][ar][ac];
+            qsa[rc][cc][vr][vc][ar][ac] = avg + (sm - avg) / return_cnt[rc][cc][vr][vc][ar][ac];
         }
     }
 };
