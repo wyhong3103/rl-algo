@@ -230,7 +230,7 @@ class PPO:
 
       return combined_a, combined_lp, combined_ent
 
-  @torch.no_grad
+  @torch.no_grad()
   def get_action(self, s, explore=True):
     s_tensor = torch.tensor(s, dtype=torch.float32)
     if self.config.is_continuous:
@@ -252,7 +252,7 @@ class PPO:
 
       return a, log_prob
 
-  @torch.no_grad
+  @torch.no_grad()
   def get_value(self, s):
     s_tensor = torch.tensor(s, dtype=torch.float32)
     v = self.value_network(s_tensor)
@@ -260,7 +260,7 @@ class PPO:
 
     return v
 
-  @torch.no_grad
+  @torch.no_grad()
   def compute_advantages(self, values, next_values, rewards, terminated):
     total_steps = len(rewards)
     advantages = np.zeros_like(rewards)
@@ -397,7 +397,7 @@ def train(config, ppo):
     plt.pause(0.01)
 
 
-@torch.no_grad
+@torch.no_grad()
 def simulate(config, ppo, render=False):
   render_mode = "human" if render else None
   env = gym.make(config.env, render_mode=render_mode)

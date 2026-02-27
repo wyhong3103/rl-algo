@@ -141,7 +141,7 @@ class DDPG:
 
     self.noise_scale = 0.1
 
-  @torch.no_grad
+  @torch.no_grad()
   def soft_update(self, online_model, target_model):
     for online_p, target_p in zip(online_model.parameters(), target_model.parameters()):
       target_p.data.copy_(
@@ -179,7 +179,7 @@ class DDPG:
     self.soft_update(self.online_value_network, self.target_value_network)
     self.soft_update(self.online_policy_network, self.target_policy_network)
 
-  @torch.no_grad
+  @torch.no_grad()
   def select_action(self, s, explore=True):
     s_tensor = torch.tensor(s, dtype=torch.float32).unsqueeze(0)
 
