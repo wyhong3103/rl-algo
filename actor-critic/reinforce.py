@@ -88,7 +88,7 @@ class REINFORCE:
     returns = torch.tensor(returns, dtype=torch.float32)
     returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
-    loss = -(returns * logpas).mean() + 0.01 * entropys.mean()
+    loss = -(returns * logpas).mean() - 0.01 * entropys.mean()
 
     self.optimizer.zero_grad()
     loss.backward()
@@ -186,7 +186,7 @@ class REINFORCE_W_BASELINE:
     returns = torch.tensor(returns, dtype=torch.float32)
     value_errors = returns - values
 
-    policy_loss = -(value_errors.detach() * logpas).mean() + 0.01 * entropys.mean()
+    policy_loss = -(value_errors.detach() * logpas).mean() - 0.01 * entropys.mean()
 
     self.policy_optimizer.zero_grad()
     policy_loss.backward()
