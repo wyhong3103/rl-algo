@@ -2,6 +2,7 @@ import copy
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import torch
+import numpy as np
 import torch.optim as optim
 from sortedcontainers import SortedList
 
@@ -124,7 +125,7 @@ def train(
   step_count = 0
 
   while len(rewards) <= total_episodes:
-    action_idx = policy.get_action(torch.tensor([obs]))
+    action_idx = policy.get_action(torch.tensor(np.expand_dims(obs, 0)))
     action_idx = action_idx[0].item()
 
     obs_p, reward, terminated, truncated, _ = env.step(action_idx)
@@ -167,10 +168,10 @@ def train(
     # Train every step after warmup
     optimizer.zero_grad()
     batches, indices, weights = rb.sample(beta)
-    batch_obs = torch.tensor([i[0] for i in batches])
+    batch_obs = torch.tensor(np.array([i[0] for i in batches]))
     batch_action_idx = torch.tensor([i[1] for i in batches])
     batch_reward = torch.tensor([i[2] for i in batches], dtype=torch.float32)
-    batch_obs_p = torch.tensor([i[3] for i in batches])
+    batch_obs_p = torch.tensor(np.array([i[3] for i in batches]))
     batch_terminated = torch.tensor([i[4] for i in batches], dtype=torch.float32)
 
     action_values = policy.model(batch_obs)
@@ -178,17 +179,11 @@ def train(
       action_values, dim=1, index=batch_action_idx.unsqueeze(1)
     ).squeeze(1)
 
-    next_online_action_values = policy.model(batch_obs_p).detach()
-    next_max_action = (
-      torch.gather(
-        target_model(batch_obs_p),
-        dim=1,
-        index=torch.argmax(next_online_action_values, dim=1).unsqueeze(1),
-      )
-      .squeeze(1)
-      .detach()
-    )
-    targets = batch_reward + gamma * (1 - batch_terminated) * next_max_action
+    with torch.no_grad():
+      next_online_action_values = policy.model(batch_obs_p)
+      next_action_idx = torch.argmax(next_online_action_values, dim=1).unsqueeze(1)
+      next_max_action = torch.gather(target_model(batch_obs_p), dim=1, index=next_action_idx).squeeze(1)
+      targets = batch_reward + gamma * (1 - batch_terminated) * next_max_action
     td_err = action_values - targets
 
     loss = ((weights * td_err).pow(2)).mul(0.5).mean()
@@ -200,7 +195,7 @@ def train(
     with torch.no_grad():
       td_err_detached = td_err.detach()
       for i in range(len(indices)):
-        rb.update(indices[i], td_err_detached[i].abs())
+        rb.update(indices[i], td_err_detached[i].abs().item())
 
       for target, online in zip(target_model.parameters(), policy.model.parameters()):
         target.data.copy_(tau * target.data + (1 - tau) * online.data)
@@ -219,7 +214,7 @@ def simulate(policy):
   rewards = 0
 
   while True:
-    action_idx = policy.get_action(torch.tensor([obs]), True)
+    action_idx = policy.get_action(torch.tensor(np.expand_dims(obs, 0)), True)
 
     action_idx = action_idx[0].item()
 

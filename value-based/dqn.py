@@ -91,7 +91,7 @@ def train(
   step_count = 0
 
   while len(rewards) <= total_episodes:
-    action_idx = policy.get_action(torch.tensor([obs]))
+    action_idx = policy.get_action(torch.tensor(np.expand_dims(obs, 0)))
     action_idx = action_idx[0].item()
 
     obs_p, reward, terminated, truncated, _ = env.step(action_idx)
@@ -134,10 +134,10 @@ def train(
     # Train every step after warmup
     optimizer.zero_grad()
     batches = rb.sample()
-    batch_obs = torch.tensor([i[0] for i in batches])
+    batch_obs = torch.tensor(np.array([i[0] for i in batches]))
     batch_action_idx = torch.tensor([i[1] for i in batches])
     batch_reward = torch.tensor([i[2] for i in batches], dtype=torch.float32)
-    batch_obs_p = torch.tensor([i[3] for i in batches])
+    batch_obs_p = torch.tensor(np.array([i[3] for i in batches]))
     batch_terminated = torch.tensor([i[4] for i in batches], dtype=torch.float32)
 
     action_values = policy.model(batch_obs)
@@ -145,7 +145,8 @@ def train(
       action_values, dim=1, index=batch_action_idx.unsqueeze(1)
     ).squeeze(1)
 
-    next_max_action = torch.max(target_model(batch_obs_p), dim=-1).values.detach()
+    with torch.no_grad():
+      next_max_action = torch.max(target_model(batch_obs_p), dim=-1).values
     targets = batch_reward + gamma * (1 - batch_terminated) * next_max_action
 
     loss = criterion(action_values, targets)
@@ -169,7 +170,7 @@ def simulate(policy):
   rewards = 0
 
   while True:
-    action_idx = policy.get_action(torch.tensor([obs]), True)
+    action_idx = policy.get_action(torch.tensor(np.expand_dims(obs, 0)), True)
 
     action_idx = action_idx[0].item()
 

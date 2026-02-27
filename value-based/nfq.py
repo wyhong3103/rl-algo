@@ -1,4 +1,3 @@
-# Not entirely accurate since I didn't train the model on the same batch repeatedly for K times
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import torch
@@ -53,27 +52,24 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
   rewards = []
 
   while len(rewards) <= total_episodes:
-    optimizer.zero_grad()
-    action_values = torch.zeros((batch_size))
-    targets = torch.zeros((batch_size))
+    batch_obs = []
+    batch_action = []
+    batch_reward = []
+    batch_next_obs = []
+    batch_terminated = []
 
     for i in range(batch_size):
-      action_idx, action_value = policy.get_action(torch.tensor(obs))
+      action_idx, _ = policy.get_action(torch.tensor(obs, dtype=torch.float32))
 
       obs_p, reward, terminated, truncated, info = env.step(action_idx)
 
       rewards_sum += reward
 
-      next_max_action = (
-        0
-        if terminated and not truncated
-        else policy.get_action(torch.tensor(obs_p), True)[1].detach()
-      )
-
-      target = reward + gamma * next_max_action
-
-      action_values[i] = action_value
-      targets[i] = target
+      batch_obs.append(obs)
+      batch_action.append(action_idx)
+      batch_reward.append(reward)
+      batch_next_obs.append(obs_p)
+      batch_terminated.append(terminated and not truncated)
 
       if terminated or truncated:
         obs, info = env.reset()
@@ -91,9 +87,23 @@ def train(policy, optimizer, batch_size, criterion, gamma, total_episodes, windo
       else:
         obs = obs_p
 
-    loss = criterion(action_values, targets)
-    loss.backward()
-    optimizer.step()
+    obs_tensor = torch.tensor(np.array(batch_obs), dtype=torch.float32)
+    next_obs_tensor = torch.tensor(np.array(batch_next_obs), dtype=torch.float32)
+    action_idx_tensor = torch.tensor(batch_action, dtype=torch.int64).unsqueeze(1)
+    reward_tensor = torch.tensor(batch_reward, dtype=torch.float32)
+    terminated_tensor = torch.tensor(batch_terminated, dtype=torch.float32)
+
+    for _ in range(K):
+      optimizer.zero_grad()
+      action_values = policy.model(obs_tensor).gather(1, action_idx_tensor).squeeze(1)
+
+      with torch.no_grad():
+        next_max_action = torch.max(policy.model(next_obs_tensor), dim=1).values
+        targets = reward_tensor + gamma * (1 - terminated_tensor) * next_max_action
+
+      loss = criterion(action_values, targets)
+      loss.backward()
+      optimizer.step()
 
     line.set_xdata(range(len(moving_avg)))
     line.set_ydata(moving_avg)
@@ -140,6 +150,7 @@ optimizer = optim.RMSprop(
 )
 window_len = 30
 total_episodes = 5000
+K=5
 
 train(policy, optimizer, batch_size, criterion, gamma, total_episodes, window_len)
 
