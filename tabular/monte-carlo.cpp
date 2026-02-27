@@ -1,3 +1,5 @@
+// Yes, I actually used my CP template to build everything from scratch. It was cancerous. Don't look at the vector initialization.
+
 #include <bits/stdc++.h>
 #include <cassert>
 #define all(x) begin(x),end(x)
