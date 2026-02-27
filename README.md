@@ -4,7 +4,7 @@ This repository includes a collection of Reinforcement Learning (RL) algorithms 
 
 I implemented these algorithms as part of my learning process while reading [Reinforcement Learning: An Introduction](https://web.stanford.edu/class/psych209/Readings/SuttonBartoIPRLBook2ndEd.pdf) by Sutton and Barto, and [Grokking Deep Reinforcement Learning](https://www.manning.com/books/grokking-deep-reinforcement-learning) by Miguel Morales. The former lays the foundation of RL, focusing primarily on tabular methods and linear function approximation, while the latter delves into Deep RL, covering the most famous methods in each Deep RL paradigm.
 
-If you are interested in RL, I highly recommend both books! However, since the latter doesn't go deeply into the mathematics, I encourage reading original research papers (and using AI) alongside them.
+If you are interested in RL, I highly recommend both books! However, since the latter doesn't go deeply into the mathematics, I encourage reading original research papers (and using AI) alongside it.
 
 ## Algorithms
 
@@ -26,4 +26,17 @@ Deep RL Methods
 8. [Soft Actor-Critic](/actor-critic/sac.py)
 9. [Proximal Policy Optimization](/actor-critic/ppo.py)
 
-> Some implementations might not perfectly match the original papers. If you find any discrepancies, please feel free to open an issue.
+> The implementation style may be inconsistent across methods because I was constantly restructuring the code, as I felt the previous versions weren't good enough. I'll admit I got a bit lazy in some parts, so certain sections aren't as clean as they could be. Additionally, some implementations may not perfectly match the original papers. If you notice any discrepancies, please feel free to open an issue.
+
+## If you're also learning RL...
+
+I recommend these resources:
+
+1. [Reinforcement Learning: An Introduction](https://web.stanford.edu/class/psych209/Readings/SuttonBartoIPRLBook2ndEd.pdf). The RL bible, a very good book. This should be your first read.
+2. [Grokking Deep Reinforcement Learning](https://www.manning.com/books/grokking-deep-reinforcement-learning).Covers modern Deep RL methods. It's quite shallow, but good enough to build intuition.
+3. [CMU: 2018 Fall: 10-703 Deep Reinforcement Learning](https://www.youtube.com/playlist?list=PLpIxOj-HnDsNfvOwRKLsUobmnF2J1l5oV). A good lecture series. I've watched a few of the lectures and think it's solid.
+4. Papers. Some methods (such as TRPO and PPO) deserve a careful read!
+
+Here’s a good piece of advice (word for word):
+
+> Mist important tip: Actually do implement things. People allways THINK they understand RL after reading some papers, until they actually implement and learn they actually don't really understand things. Implementing yourself is the only way to actually understand. Otherwise you are just like the drunk people screaming at their TV blasting football and thinking they could do that Imho. [(Source)](https://www.reddit.com/r/MachineLearning/comments/1779tv0/comment/k4rrdxy/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button)
