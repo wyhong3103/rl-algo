@@ -6,6 +6,8 @@ I implemented these algorithms as part of my learning process while reading [Rei
 
 If you are interested in RL, I highly recommend both books! However, since the latter doesn't go deeply into the mathematics, I encourage reading original research papers (and using AI) alongside it.
 
+I'm no expert on this subject, I'm learning too. Just sharing this in case it helps anyone else who’s figuring it out as well.
+
 ## Algorithms
 
 Tabular Methods
