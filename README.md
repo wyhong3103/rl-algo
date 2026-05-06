@@ -35,7 +35,7 @@ Deep RL Methods
 I recommend these resources:
 
 1. [Reinforcement Learning: An Introduction](https://web.stanford.edu/class/psych209/Readings/SuttonBartoIPRLBook2ndEd.pdf). The RL bible, a very good book. This should be your first read.
-2. [Grokking Deep Reinforcement Learning](https://www.manning.com/books/grokking-deep-reinforcement-learning).Covers modern Deep RL methods. It's quite shallow, but good enough to build intuition.
+2. [Grokking Deep Reinforcement Learning](https://www.manning.com/books/grokking-deep-reinforcement-learning). Covers modern Deep RL methods. It's quite shallow, but good enough to build intuition.
 3. [CMU: 2018 Fall: 10-703 Deep Reinforcement Learning](https://www.youtube.com/playlist?list=PLpIxOj-HnDsNfvOwRKLsUobmnF2J1l5oV). A good lecture series. I've watched a few of the lectures and think it's solid.
 4. Papers. Some methods (such as TRPO and PPO) deserve a careful read!
 
